@@ -41,12 +41,10 @@ func NewChannelBotHandler(settingsSvc BotSettings, tokens ChannelBotTokenProvide
 }
 
 type reportHeartbeatRequest struct {
-	BotVersion       string   `json:"bot_version"`
-	WebhookStatus    string   `json:"webhook_status"`
-	MachineCode      string   `json:"machine_code"`
-	LicenseStatus    string   `json:"license_status"`
-	LicenseExpiresAt string   `json:"license_expires_at"`
-	Warnings         []string `json:"warnings"`
+	BotVersion    string   `json:"bot_version"`
+	WebhookStatus string   `json:"webhook_status"`
+	MachineCode   string   `json:"machine_code"`
+	Warnings      []string `json:"warnings"`
 }
 
 // GetBotConfig GET /api/v1/channel/telegram/config
@@ -99,8 +97,6 @@ func (h *ChannelBotHandler) ReportHeartbeat(c *gin.Context) {
 		BotVersion:       req.BotVersion,
 		WebhookStatus:    req.WebhookStatus,
 		MachineCode:      req.MachineCode,
-		LicenseStatus:    req.LicenseStatus,
-		LicenseExpiresAt: req.LicenseExpiresAt,
 		Warnings:         append([]string(nil), req.Warnings...),
 		ConfigVersion:    current.ConfigVersion,
 		LastConfigSyncAt: current.LastConfigSyncAt,

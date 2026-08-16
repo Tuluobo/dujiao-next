@@ -84,8 +84,6 @@ type TelegramBotRuntimeStatusSetting struct {
 	BotVersion       string   `json:"bot_version"`
 	WebhookStatus    string   `json:"webhook_status"`
 	MachineCode      string   `json:"machine_code"`
-	LicenseStatus    string   `json:"license_status"`
-	LicenseExpiresAt string   `json:"license_expires_at"`
 	Warnings         []string `json:"warnings"`
 	ConfigVersion    int      `json:"config_version"`
 	LastConfigSyncAt string   `json:"last_config_sync_at"`
@@ -292,8 +290,6 @@ func EncodeTelegramBotRuntimeStatus(status TelegramBotRuntimeStatusSetting) map[
 		"bot_version":         status.BotVersion,
 		"webhook_status":      status.WebhookStatus,
 		"machine_code":        status.MachineCode,
-		"license_status":      status.LicenseStatus,
-		"license_expires_at":  status.LicenseExpiresAt,
 		"warnings":            append([]string(nil), status.Warnings...),
 		"config_version":      status.ConfigVersion,
 		"last_config_sync_at": status.LastConfigSyncAt,
@@ -378,8 +374,6 @@ func DecodeTelegramBotRuntimeStatus(raw jsonmap.JSON, fallback TelegramBotRuntim
 	next.BotVersion = settingsvalue.ReadString(raw, "bot_version", next.BotVersion)
 	next.WebhookStatus = settingsvalue.ReadString(raw, "webhook_status", next.WebhookStatus)
 	next.MachineCode = settingsvalue.ReadString(raw, "machine_code", next.MachineCode)
-	next.LicenseStatus = settingsvalue.ReadString(raw, "license_status", next.LicenseStatus)
-	next.LicenseExpiresAt = settingsvalue.ReadString(raw, "license_expires_at", next.LicenseExpiresAt)
 	next.Warnings = settingsvalue.ReadStringList(raw, "warnings", next.Warnings)
 	next.ConfigVersion = settingsvalue.ReadInt(raw, "config_version", next.ConfigVersion)
 	next.LastConfigSyncAt = settingsvalue.ReadString(raw, "last_config_sync_at", next.LastConfigSyncAt)
