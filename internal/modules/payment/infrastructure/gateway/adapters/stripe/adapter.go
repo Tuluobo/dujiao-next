@@ -99,12 +99,13 @@ func (a *stripeAdapter) CreatePayment(ctx context.Context, raw jsonmap.JSON, inp
 
 	cancelURL, _ := input.Extra["cancel_url"].(string)
 	native := stripe.CreateInput{
-		OrderNo:     input.OrderNo,
-		Amount:      payAmount,
-		Currency:    payCurrency,
-		Description: input.Subject,
-		SuccessURL:  successURL,
-		CancelURL:   cancelURL,
+		OrderNo:       input.OrderNo,
+		Amount:        payAmount,
+		Currency:      payCurrency,
+		Description:   input.Subject,
+		SuccessURL:    successURL,
+		CancelURL:     cancelURL,
+		CustomerEmail: strings.TrimSpace(input.BuyerEmail),
 	}
 	result, err := stripe.CreatePayment(ctx, cfg, native)
 	if err != nil {

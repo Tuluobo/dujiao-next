@@ -11,6 +11,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/mail"
 	"net/url"
 	"sort"
 	"strconv"
@@ -100,6 +101,8 @@ type CreateInput struct {
 	Description string
 	SuccessURL  string
 	CancelURL   string
+	// CustomerEmail 预填收银台的买家邮箱，可为空。
+	CustomerEmail string
 }
 
 // CreateResult 创建 Stripe 支付返回。
@@ -222,6 +225,12 @@ func CreatePayment(ctx context.Context, cfg *Config, input CreateInput) (*Create
 	form.Set("line_items[0][price_data][product_data][name]", subject)
 	form.Set("metadata[order_no]", orderNo)
 	form.Set("payment_intent_data[metadata][order_no]", orderNo)
+	// customer_email 预填收银台邮箱。Stripe 对格式不合法的地址直接返回 400，
+	// 会让整笔支付创建失败 —— 而预填只是体验优化，不该有这种代价。
+	// 因此这里解析一次，解析不过就当没传，让用户在收银台自己填。
+	if email := normalizeCustomerEmail(input.CustomerEmail); email != "" {
+		form.Set("customer_email", email)
+	}
 	for _, pmType := range cfg.PaymentMethodTypes {
 		form.Add("payment_method_types[]", pmType)
 		// Stripe 要求 Web Checkout 场景下 WeChat Pay 必须显式声明 client，否则返回 400。
@@ -253,6 +262,24 @@ func CreatePayment(ctx context.Context, cfg *Config, input CreateInput) (*Create
 		return nil, fmt.Errorf("%w: missing session id or url", ErrResponseInvalid)
 	}
 	return result, nil
+}
+
+// normalizeCustomerEmail 返回可安全提交给 Stripe 的买家邮箱，无法使用时返回空串。
+//
+// 只接受裸地址：调用方的来源是 user.Email 与 order.GuestEmail 两个数据库字段，
+// 正常情况下不会出现 `Name <a@b.com>` 这种带显示名的形式。与其猜测该取哪一段，
+// 不如遇到含空白的输入就整个放弃预填 —— 反正代价只是让用户在收银台自己填一次。
+// 走一遍 mail.ParseAddress 是为了挡住缺 @、域名畸形之类会让 Stripe 返回 400 的地址。
+func normalizeCustomerEmail(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" || strings.ContainsAny(trimmed, " \t\r\n") {
+		return ""
+	}
+	parsed, err := mail.ParseAddress(trimmed)
+	if err != nil {
+		return ""
+	}
+	return parsed.Address
 }
 
 // QueryPayment 按 provider_ref 查询 Stripe 支付状态。

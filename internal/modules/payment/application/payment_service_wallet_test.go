@@ -36,6 +36,7 @@ import (
 	productgormstore "github.com/dujiao-next/internal/modules/catalog/product/store/gormstore"
 
 	userdomain "github.com/dujiao-next/internal/modules/identity/user/domain"
+	usergormstore "github.com/dujiao-next/internal/modules/identity/user/infrastructure/gormstore"
 	walletapp "github.com/dujiao-next/internal/modules/wallet/application"
 	walletcontract "github.com/dujiao-next/internal/modules/wallet/contract"
 	walletgormstore "github.com/dujiao-next/internal/modules/wallet/infrastructure/gormstore"
@@ -108,6 +109,7 @@ func setupPaymentServiceWalletTest(t *testing.T) (*PaymentService, *gorm.DB) {
 		PaymentStore:            paymentRepo,
 		ChannelStore:            channelRepo,
 		WalletRepo:              walletRepo,
+		UserStore:               usergormstore.New(db),
 		WalletService:           walletSvc,
 		ExpireMinutes:           15,
 		PaymentProviderRegistry: reg,

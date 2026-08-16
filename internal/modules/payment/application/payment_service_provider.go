@@ -20,6 +20,7 @@ import (
 	"github.com/dujiao-next/internal/shared/money"
 	"github.com/dujiao-next/internal/shared/outboundctx"
 	"github.com/dujiao-next/internal/shared/serial"
+	"github.com/dujiao-next/internal/telegramidentity"
 
 	"github.com/shopspring/decimal"
 )
@@ -166,6 +167,7 @@ func (s *PaymentService) applyProviderPayment(input CreatePaymentInput, order *o
 		Currency:       payment.Currency,
 		ClientIP:       strings.TrimSpace(input.ClientIP),
 		ChannelType:    channel.ChannelType,
+		BuyerEmail:     s.resolveBuyerEmail(order),
 		Extra:          extra,
 		ReturnURLQuery: returnURLQuery,
 		// 分销站/自定义域名下单时按当前 tenant 域名生成 ReturnURL（主站为空，
@@ -399,4 +401,38 @@ func resolveTokenPayOrderUserKey(order *orderdomain.Order) string {
 		return guestEmail
 	}
 	return strings.TrimSpace(order.OrderNo)
+}
+
+// resolveBuyerEmail 解析用于网关收银台预填的买家邮箱。
+//
+// 登录用户以账号邮箱为准而不是 order.GuestEmail —— 后者对登录订单本就是空的。
+// 游客订单则只有下单时填的那一个邮箱可用。
+//
+// 全程 fail-soft：查不到用户、用户没邮箱、或者压根没有邮箱可用时一律返回空串，
+// 由 adapter 当作「不传」处理。预填只是体验优化，不值得让一笔支付创建失败。
+// Telegram 注册用户持有的是 IsPlaceholderEmail 占位地址，不是真实邮箱，
+// 预填进收银台只会让用户对着一个陌生地址发懵，因此同样按空处理。
+func (s *PaymentService) resolveBuyerEmail(order *orderdomain.Order) string {
+	if order == nil {
+		return ""
+	}
+
+	email := strings.TrimSpace(order.GuestEmail)
+	if order.UserID > 0 {
+		email = ""
+		if s.userRepo != nil {
+			user, err := s.userRepo.GetByID(order.UserID)
+			if err != nil {
+				paymentLogger("order_id", order.ID, "user_id", order.UserID).
+					Warnw("payment_resolve_buyer_email_failed", "error", err)
+			} else if user != nil {
+				email = strings.TrimSpace(user.Email)
+			}
+		}
+	}
+
+	if telegramidentity.IsPlaceholderEmail(email) {
+		return ""
+	}
+	return email
 }

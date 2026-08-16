@@ -230,3 +230,62 @@ func TestMapCheckoutSessionStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestCreatePaymentCustomerEmail(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "PlainAddress", input: "buyer@example.com", want: "buyer@example.com"},
+		{name: "TrimsSurroundingSpace", input: "  buyer@example.com  ", want: "buyer@example.com"},
+		// 下面这些一律降级成「不传」，让用户在收银台自己填，而不是让整笔支付 400
+		{name: "EmptyOmitted", input: "", want: ""},
+		{name: "MalformedOmitted", input: "not-an-email", want: ""},
+		{name: "InnerSpaceOmitted", input: "a b@example.com", want: ""},
+		{name: "NewlineOmitted", input: "buyer@example.com\nBcc: x@y.com", want: ""},
+		// 只收裸地址：带显示名的形式同样放弃预填，不去猜该取哪一段
+		{name: "DisplayNameOmitted", input: "Buyer <buyer@example.com>", want: ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var form url.Values
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body, _ := io.ReadAll(r.Body)
+				form, _ = url.ParseQuery(string(body))
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"id":"cs_test_123","url":"https://checkout.stripe.com/c/pay/cs_test_123","status":"open"}`))
+			}))
+			defer server.Close()
+
+			cfg, err := ParseConfig(map[string]interface{}{
+				"secret_key":     "sk_test_123",
+				"webhook_secret": "whsec_123",
+				"success_url":    "https://example.com/payment?stripe_return=1",
+				"cancel_url":     "https://example.com/payment?stripe_cancel=1",
+				"api_base_url":   server.URL,
+			})
+			if err != nil {
+				t.Fatalf("parse config failed: %v", err)
+			}
+
+			if _, err := CreatePayment(context.Background(), cfg, CreateInput{
+				OrderNo:       "ORDER-1001",
+				Amount:        "12.88",
+				Currency:      "CNY",
+				CustomerEmail: tc.input,
+			}); err != nil {
+				t.Fatalf("create payment failed: %v", err)
+			}
+
+			if got := form.Get("customer_email"); got != tc.want {
+				t.Fatalf("customer_email = %q, want %q", got, tc.want)
+			}
+			if tc.want == "" {
+				if _, present := form["customer_email"]; present {
+					t.Fatal("customer_email must be omitted entirely, not sent empty")
+				}
+			}
+		})
+	}
+}

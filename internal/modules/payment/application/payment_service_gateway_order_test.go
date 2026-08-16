@@ -21,6 +21,7 @@ import (
 	"github.com/dujiao-next/internal/shared/jsonmap"
 	"github.com/dujiao-next/internal/shared/jsonslice"
 	"github.com/dujiao-next/internal/shared/money"
+	"github.com/dujiao-next/internal/telegramidentity"
 
 	"github.com/shopspring/decimal"
 )
@@ -1033,5 +1034,156 @@ func TestHandleCallbackAcceptsGatewayOrderNoForWalletRecharge(t *testing.T) {
 	}
 	if updated == nil || updated.ID != payment.ID {
 		t.Fatalf("expected updated payment")
+	}
+}
+
+// TestResolveBuyerEmail 覆盖收银台预填邮箱的来源分支。
+//
+// 关键区分：登录订单的 GuestEmail 本就是空的，邮箱只能从 user 表取；游客订单没有
+// UserID，只能用下单时填的那个。两者不能互相兜底 —— 尤其登录用户查不到时不该回落到
+// GuestEmail，那可能是另一个人的地址。
+func TestResolveBuyerEmail(t *testing.T) {
+	svc, db := setupPaymentServiceWalletTest(t)
+	now := time.Now()
+
+	createUser := func(t *testing.T, email string) uint {
+		t.Helper()
+		user := &userdomain.User{
+			Email:        email,
+			PasswordHash: "hash",
+			Status:       constants.UserStatusActive,
+			CreatedAt:    now,
+			UpdatedAt:    now,
+		}
+		if err := db.Create(user).Error; err != nil {
+			t.Fatalf("create user failed: %v", err)
+		}
+		return user.ID
+	}
+
+	memberID := createUser(t, "member@example.com")
+	telegramID := createUser(t, telegramidentity.BuildPlaceholderEmail("987654321"))
+
+	tests := []struct {
+		name  string
+		order *orderdomain.Order
+		want  string
+	}{
+		{
+			name:  "LoggedInUserUsesAccountEmail",
+			order: &orderdomain.Order{OrderNo: "DJBUYEREMAIL001", UserID: memberID},
+			want:  "member@example.com",
+		},
+		{
+			name:  "GuestUsesOrderEmail",
+			order: &orderdomain.Order{OrderNo: "DJBUYEREMAIL002", GuestEmail: "guest@example.com"},
+			want:  "guest@example.com",
+		},
+		{
+			name:  "GuestWithoutEmailResolvesEmpty",
+			order: &orderdomain.Order{OrderNo: "DJBUYEREMAIL003"},
+			want:  "",
+		},
+		{
+			// Telegram 注册用户持有的是占位地址，不是真实邮箱，不能预填
+			name:  "TelegramPlaceholderResolvesEmpty",
+			order: &orderdomain.Order{OrderNo: "DJBUYEREMAIL004", UserID: telegramID},
+			want:  "",
+		},
+		{
+			name:  "MissingUserDoesNotFallBackToGuestEmail",
+			order: &orderdomain.Order{OrderNo: "DJBUYEREMAIL005", UserID: 999999, GuestEmail: "someone-else@example.com"},
+			want:  "",
+		},
+		{
+			name:  "NilOrderResolvesEmpty",
+			order: nil,
+			want:  "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := svc.resolveBuyerEmail(tc.order); got != tc.want {
+				t.Fatalf("resolveBuyerEmail = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestApplyProviderPaymentPassesBuyerEmail 锁住解析结果确实被塞进 GatewayCreateInput。
+// 少了这条，删掉 createInput 里那行赋值不会让任何测试变红。
+func TestApplyProviderPaymentPassesBuyerEmail(t *testing.T) {
+	svc, db := setupPaymentServiceWalletTest(t)
+	now := time.Now()
+
+	order := &orderdomain.Order{
+		OrderNo:                 "DJTESTBUYEREMAIL001",
+		GuestEmail:              "guest-checkout@example.com",
+		Status:                  constants.OrderStatusPendingPayment,
+		Currency:                "CNY",
+		OriginalAmount:          money.FromDecimal(decimal.NewFromInt(1)),
+		DiscountAmount:          money.FromDecimal(decimal.Zero),
+		PromotionDiscountAmount: money.FromDecimal(decimal.Zero),
+		TotalAmount:             money.FromDecimal(decimal.NewFromInt(1)),
+		WalletPaidAmount:        money.FromDecimal(decimal.Zero),
+		OnlinePaidAmount:        money.FromDecimal(decimal.NewFromInt(1)),
+		RefundedAmount:          money.FromDecimal(decimal.Zero),
+		CreatedAt:               now,
+		UpdatedAt:               now,
+	}
+	if err := db.Create(order).Error; err != nil {
+		t.Fatalf("create order failed: %v", err)
+	}
+
+	channel := &paymentdomain.PaymentChannel{
+		ProviderType:    constants.PaymentProviderOfficial,
+		ChannelType:     constants.PaymentChannelTypeWechat,
+		InteractionMode: constants.PaymentInteractionQR,
+		FeeRate:         money.FromDecimal(decimal.Zero),
+		ConfigJSON: jsonmap.JSON{
+			"notify_url": "https://api.example.com/api/v1/payments/callback",
+		},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := db.Create(channel).Error; err != nil {
+		t.Fatalf("create channel failed: %v", err)
+	}
+
+	payment := &paymentdomain.Payment{
+		OrderID:         order.ID,
+		ChannelID:       channel.ID,
+		ProviderType:    channel.ProviderType,
+		ChannelType:     channel.ChannelType,
+		InteractionMode: channel.InteractionMode,
+		Amount:          money.FromDecimal(decimal.RequireFromString("1.00")),
+		FeeRate:         money.FromDecimal(decimal.Zero),
+		FeeAmount:       money.FromDecimal(decimal.Zero),
+		Currency:        "CNY",
+		Status:          constants.PaymentStatusInitiated,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+	if err := db.Create(payment).Error; err != nil {
+		t.Fatalf("create payment failed: %v", err)
+	}
+
+	var gotBuyerEmail string
+	registerTestGateway(t, svc, constants.PaymentProviderOfficial, constants.PaymentChannelTypeWechat, emptyProviderRefProvider{
+		onCreate: func(input paymentcontract.GatewayCreateInput) {
+			gotBuyerEmail = input.BuyerEmail
+		},
+	})
+
+	if err := svc.applyProviderPayment(CreatePaymentInput{
+		ClientIP: "127.0.0.1",
+		Context:  context.Background(),
+	}, order, channel, payment); err != nil {
+		t.Fatalf("applyProviderPayment failed: %v", err)
+	}
+
+	if gotBuyerEmail != "guest-checkout@example.com" {
+		t.Fatalf("gateway input buyer email = %q, want %q", gotBuyerEmail, "guest-checkout@example.com")
 	}
 }

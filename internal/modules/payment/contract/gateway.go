@@ -25,7 +25,11 @@ type GatewayCreateInput struct {
 	ReturnURLQuery map[string]string
 	ClientIP       string
 	ChannelType    string
-	Extra          jsonmap.JSON
+	// BuyerEmail 买家邮箱，用于在网关收银台预填。登录用户取账号邮箱，游客取下单时
+	// 留的邮箱；两者都没有（或只有 Telegram 占位邮箱）时为空。收银台预填是锦上添花，
+	// 因此这个字段允许为空，adapter 必须把空值当作「不传」而不是错误。
+	BuyerEmail string
+	Extra      jsonmap.JSON
 }
 
 // GatewayCreateResult 是统一支付网关创建结果。
