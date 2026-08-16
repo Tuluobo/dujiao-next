@@ -24,37 +24,22 @@ const (
 
 // releasePayload GitHub Releases API 响应中本检测器关心的字段
 type releasePayload struct {
-	TagName     string         `json:"tag_name"`
-	Name        string         `json:"name"`
-	HTMLURL     string         `json:"html_url"`
-	Body        string         `json:"body"`
-	Draft       bool           `json:"draft"`
-	Prerelease  bool           `json:"prerelease"`
-	PublishedAt time.Time      `json:"published_at"`
-	Assets      []assetPayload `json:"assets"`
+	TagName     string    `json:"tag_name"`
+	Name        string    `json:"name"`
+	HTMLURL     string    `json:"html_url"`
+	Body        string    `json:"body"`
+	Draft       bool      `json:"draft"`
+	Prerelease  bool      `json:"prerelease"`
+	PublishedAt time.Time `json:"published_at"`
 }
 
-type assetPayload struct {
-	Name               string `json:"name"`
-	BrowserDownloadURL string `json:"browser_download_url"`
-	Size               int64  `json:"size"`
-}
-
-// Asset 发行版附件（goreleaser 产出的平台归档与 checksums.txt）
-type Asset struct {
-	Name        string `json:"name"`
-	DownloadURL string `json:"download_url"`
-	Size        int64  `json:"size"`
-}
-
-// Release GitHub 最新发行版的完整信息，供版本检测与一键升级共用
+// Release GitHub 最新发行版信息，供版本检测展示
 type Release struct {
 	TagName     string
 	Name        string
 	HTMLURL     string
 	Body        string
 	PublishedAt time.Time
-	Assets      []Asset
 }
 
 // CheckResult 检测结果，已包含当前与最新版本以及是否需要更新
@@ -75,7 +60,7 @@ var ErrRateLimited = errors.New("github api rate limit exceeded")
 // CheckLatestRelease 通过 GitHub Releases API 获取最新发行版并与当前版本比较。
 // 仓库地址固定为 dujiao-next/dujiao-next，不接受外部传入，避免 SSRF。
 func CheckLatestRelease(ctx context.Context) (*CheckResult, error) {
-	release, err := FetchLatestRelease(ctx)
+	release, err := fetchLatestRelease(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -103,8 +88,8 @@ func CheckLatestRelease(ctx context.Context) (*CheckResult, error) {
 	return result, nil
 }
 
-// FetchLatestRelease 拉取最新发行版原始信息（含附件列表），供一键升级下载对应平台归档。
-func FetchLatestRelease(ctx context.Context) (*Release, error) {
+// fetchLatestRelease 拉取最新发行版原始信息，供版本检测比较标签。
+func fetchLatestRelease(ctx context.Context) (*Release, error) {
 	url := fmt.Sprintf("%s/repos/%s/%s/releases/latest", githubAPIBaseURL, repoOwner, repoName)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -148,13 +133,6 @@ func FetchLatestRelease(ctx context.Context) (*Release, error) {
 		Body:        payload.Body,
 		PublishedAt: payload.PublishedAt,
 	}
-	for _, a := range payload.Assets {
-		release.Assets = append(release.Assets, Asset{
-			Name:        a.Name,
-			DownloadURL: a.BrowserDownloadURL,
-			Size:        a.Size,
-		})
-	}
 	return release, nil
 }
 
@@ -168,8 +146,8 @@ type semver struct {
 }
 
 // IsNewerVersion 判断 latest 是否比 current 更新。返回 (true, nil) 表示需要更新；
-// 当任一版本号无法解析时 fail-closed：返回 false 和错误。这个结果会直接决定
-// 是否允许自动替换二进制，不能把“字符串不同”猜成“版本更高”。
+// 当任一版本号无法解析时 fail-closed：返回 false 和错误。
+// 不能把“字符串不同”猜成“版本更高”，否则会对着一个畸形标签反复提示升级。
 func IsNewerVersion(latest, current string) (bool, error) {
 	l, lErr := parseSemver(latest)
 	c, cErr := parseSemver(current)
@@ -280,8 +258,7 @@ var semverIdentifier = regexp.MustCompile(`^[0-9A-Za-z-]+$`)
 // 解析为核心三段加预发布段。构建元数据（+ 之后）按 SemVer 规定不参与优先级比较，直接丢弃。
 //
 // 严格要求核心版本恰好是 X.Y.Z 三段：宽松接受 "1.2" 或 "1.2.3.4" 会把一个明显畸形的
-// 标签悄悄解析成某个版本号，然后据此判断要不要自动替换二进制 —— 这种地方宁可报错，
-// 让调用方拒绝自动升级，也不要猜。
+// 标签悄悄解析成某个版本号 —— 这种地方宁可报错，让调用方跳过升级提示，也不要猜。
 func parseSemver(v string) (semver, error) {
 	var out semver
 	s := strings.TrimSpace(v)

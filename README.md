@@ -67,8 +67,7 @@ application: the Go backend, the customer storefront, and the admin panel.
 │   ├── admin/                # admin panel SPA        (dev :5174)
 │   └── user/                 # customer storefront SPA (dev :5173)
 ├── config.yml.example
-├── Dockerfile                # single full-stack image
-└── .goreleaser.yaml
+└── Dockerfile                # single full-stack image
 ```
 
 Runtime directories created on first start: `db/` (SQLite), `uploads/`, `logs/`.
@@ -166,66 +165,28 @@ Chinese, and English. Do not hard-code user-facing strings on either side.
 
 ## Quick Start (Deploy)
 
-### Official one-click installer (Ubuntu / Debian)
-
-On a fresh Ubuntu 22.04+ or Debian 12+ server, download and run the official
-interactive installer:
+Images are published to GitHub Packages (GHCR) by the `docker` workflow on every
+`v*` tag. Pull and run:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dujiao-next/dujiao-next/main/scripts/dujiao-next-manager.sh \
-  -o /tmp/dujiao-next-manager.sh
-sudo bash /tmp/dujiao-next-manager.sh install
+docker run -d -p 8080:8080 \
+  -v $PWD/config.yml:/app/config.yml:ro \
+  ghcr.io/tuluobo/dujiao-next:latest
 ```
 
-The installer deploys the release binary with systemd, an isolated local Redis,
-Nginx, SQLite, and a Let's Encrypt certificate. After installation, reopen the
-management menu with:
+The image is multi-arch (`linux/amd64`, `linux/arm64`). Copy `config.yml.example` to
+`config.yml` first and set `jwt.secret`, `user_jwt.secret`, and `web.admin_path`.
+
+Runtime state lives in `/app/db`, `/app/uploads`, and `/app/logs` — mount volumes for
+those paths to persist data across container rebuilds.
+
+To upgrade, pull the new image and recreate the container:
 
 ```bash
-sudo dujiao-next-manager
-```
-
-Common automation-friendly commands are also available:
-
-```bash
-sudo dujiao-next-manager status
-sudo dujiao-next-manager logs app
-sudo dujiao-next-manager restart
-sudo dujiao-next-manager configure-domain
-sudo dujiao-next-manager configure-admin-path
-sudo dujiao-next-manager renew-cert
-sudo dujiao-next-manager admin-reset-password
-sudo dujiao-next-manager admin-reset-2fa
-sudo dujiao-next-manager uninstall
-```
-
-The first release supports a single non-wildcard domain on Ubuntu/Debian only.
-It does not adopt an existing manual installation. If SMTP is skipped, configure
-it in the admin panel before enabling email-verification registration. Application
-data lives in `/opt/dujiao-next`; installer state is stored in
-`/etc/dujiao-next/install-state.json`. TLS failures leave only the ACME challenge
-endpoint enabled, and `install` can be rerun after DNS or firewall repair. Safe
-uninstall creates and verifies a `0600` recovery archive under
-`/var/backups/dujiao-next` before deleting managed data.
-
-### Manual binary installation
-
-Download the latest `dujiao-next_*.tar.gz` from [Releases](https://github.com/dujiao-next/dujiao-next/releases):
-
-```bash
-tar -xzf dujiao-next_*.tar.gz
-cp config.yml.example config.yml
-# edit config.yml: set jwt.secret, user_jwt.secret, and web.admin_path
-./dujiao-next
+docker compose pull && docker compose up -d
 ```
 
 Full instructions: https://dujiao-next.com/deploy/
-
-Or with Docker:
-
-```bash
-docker run -d -p 8080:8080 -v $PWD/config.yml:/app/config.yml:ro dujiaonext/dujiao-next:latest
-```
 
 ## Quick Start (Develop)
 
@@ -247,12 +208,14 @@ development-only concern.
 
 ## Building the Full-Stack Binary
 
+Building the Docker image reproduces the release path exactly:
+
 ```bash
-goreleaser build --snapshot --single-target --clean
+docker build -t dujiao-next:dev .
 ```
 
-This builds both frontends, embeds them, and compiles with `-tags fullstack` — the same path
-CI uses for releases. The manual equivalent:
+To build a bare binary locally instead — this builds both frontends, embeds them, and compiles
+with `-tags fullstack`:
 
 ```bash
 (cd frontend/admin && pnpm run build:fullstack)   # injects the <base> placeholder

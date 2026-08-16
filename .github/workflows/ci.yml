@@ -15,40 +15,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  installer:
-    name: Verify installer
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install shell test dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y python3-yaml shellcheck
-
-      - name: Check Bash syntax and ShellCheck
-        run: |
-          bash -n scripts/dujiao-next-manager.sh
-          bash -n scripts/tests/dujiao-next-manager_test.sh
-          shellcheck -x -S warning scripts/dujiao-next-manager.sh scripts/tests/dujiao-next-manager_test.sh
-
-      - name: Run installer tests
-        run: sudo bash scripts/tests/dujiao-next-manager_test.sh
-
-      - name: Check release archive includes installer
-        run: |
-          python3 - <<'PY'
-          import yaml
-
-          with open('.goreleaser.yaml', encoding='utf-8') as handle:
-              config = yaml.safe_load(handle)
-          files = config['archives'][0]['files']
-          assert './scripts/dujiao-next-manager.sh' in files, files
-          PY
-
   api:
     name: Verify API
     runs-on: ubuntu-latest
@@ -86,31 +52,6 @@ jobs:
 
       - name: Build server
         run: go build ./cmd/server
-
-  # 发布配置只在打 tag 时才会被 GoReleaser 读取，普通 CI 覆盖不到。
-  # 而配置解析失败是在构建开始前就中止的，等到 tag 那一刻才发现代价最高，
-  # 所以这里用与 release.yml 完全相同的 distribution/version 提前验一次。
-  release-config:
-    name: Verify release config
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Check .goreleaser.yaml
-        uses: goreleaser/goreleaser-action@v6
-        with:
-          distribution: goreleaser
-          version: latest
-          args: check
 
   fullstack:
     name: Verify fullstack build

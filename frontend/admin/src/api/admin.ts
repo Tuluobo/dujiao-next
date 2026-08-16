@@ -388,16 +388,8 @@ export const adminAPI = {
   updateAffiliateSettings: (data: AdminAffiliateSetting) => api.put('/admin/settings/affiliate', data),
   getPublicConfig: () => api.get('/public/config'),
   getImageCaptcha: () => api.get('/public/captcha/image'),
-  getSystemVersion: () => api.get('/admin/system/version'),
   checkSystemUpdate: (params?: { owner?: string; repo?: string }) =>
     api.get('/admin/system/version/check', { params }),
-  getUpdateCapability: () => api.get('/admin/system/update/capability'),
-  getUpdateStatus: () => api.get('/admin/system/update/status'),
-  startSystemUpdate: () => api.post('/admin/system/update/start'),
-  // force：迁移已开始或元数据不可信时，确认风险后强制回滚
-  rollbackSystemUpdate: (data?: { force?: boolean }) =>
-    api.post('/admin/system/update/rollback', data ?? {}),
-  restartSystemService: () => api.post('/admin/system/restart'),
   getDashboardOverview: (params?: Record<string, unknown>) => api.get('/admin/dashboard/overview', { params }),
   getDashboardTrends: (params?: Record<string, unknown>) => api.get('/admin/dashboard/trends', { params }),
   getDashboardRankings: (params?: Record<string, unknown>) => api.get('/admin/dashboard/rankings', { params }),
