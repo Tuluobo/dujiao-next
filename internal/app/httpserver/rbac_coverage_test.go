@@ -185,19 +185,6 @@ func discoverAdminRouteSources(routerDirectory string) ([]string, error) {
 	return sources, nil
 }
 
-func TestExtractAdminRoutesIncludesPlatformHTTPRoutes(t *testing.T) {
-	routes, err := extractAdminRoutesFromSource()
-	if err != nil {
-		t.Fatalf("extract admin routes: %v", err)
-	}
-	for _, route := range routes {
-		if route.method == "GET" && route.object == "/admin/system/version/check" {
-			return
-		}
-	}
-	t.Fatal("platform HTTP route GET /admin/system/version/check was not discovered")
-}
-
 func extractAdminRoutesFromFile(path string) ([]adminRoute, error) {
 	fileSet := token.NewFileSet()
 	file, err := parser.ParseFile(fileSet, path, nil, 0)

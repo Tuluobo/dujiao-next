@@ -79,7 +79,6 @@ jobs:
           (cd frontend/admin && pnpm install --frozen-lockfile)
           (cd frontend/user  && pnpm install --frozen-lockfile)
 
-      # release notes 的 sanitizer 是后台唯一一处 v-html，攻击向量必须每次 CI 都跑一遍
       - name: Run admin frontend tests
         run: (cd frontend/admin && pnpm run test)
 

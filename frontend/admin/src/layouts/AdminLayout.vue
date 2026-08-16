@@ -51,8 +51,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
-import { RefreshCw } from 'lucide-vue-next'
-import SystemUpdateDialog from '@/components/SystemUpdateDialog.vue'
 import { useAdminAuthStore } from '@/stores/auth'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
@@ -108,9 +106,6 @@ const authStore = useAdminAuthStore()
 const isDark = ref(false)
 const appVersion = ref('')
 const siteUrl = ref('')
-
-// 版本检测与一键升级的完整交互都在 SystemUpdateDialog 内，这里只负责开关
-const updateCheckOpen = ref(false)
 
 const navSearch = ref('')
 const expandedGroups = ref<Record<string, boolean>>(readExpandedGroups())
@@ -964,14 +959,6 @@ onBeforeUnmount(() => {
                 <SelectItem value="en-US">{{ t('admin.common.lang.enUS') }}</SelectItem>
               </SelectContent>
             </Select>
-            <Button
-              size="icon-sm"
-              variant="outline"
-              :title="t('admin.updateCheck.button')"
-              @click="updateCheckOpen = true"
-            >
-              <RefreshCw class="h-4 w-4" />
-            </Button>
             <Button size="icon-sm" variant="outline" @click="toggleTheme">
               <Sun v-if="isDark" class="h-4 w-4" />
               <Moon v-else class="h-4 w-4" />
@@ -994,7 +981,5 @@ onBeforeUnmount(() => {
         </main>
       </div>
     </div>
-
-    <SystemUpdateDialog v-model:open="updateCheckOpen" />
   </div>
 </template>

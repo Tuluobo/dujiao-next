@@ -6,7 +6,6 @@ import (
 	affiliatebootstrap "github.com/dujiao-next/internal/bootstrap/affiliate"
 	settingsbootstrap "github.com/dujiao-next/internal/bootstrap/settingshttp"
 	"github.com/dujiao-next/internal/config"
-	adproxytransport "github.com/dujiao-next/internal/modules/adproxy/transport/http"
 	affiliatetransport "github.com/dujiao-next/internal/modules/affiliate/transport/http"
 	apicredentialtransport "github.com/dujiao-next/internal/modules/apicredential/transport/http"
 	auditlogtransport "github.com/dujiao-next/internal/modules/auditlog/transport/http"
@@ -38,7 +37,6 @@ import (
 	uploadtransport "github.com/dujiao-next/internal/modules/upload/transport/http"
 	wallettransport "github.com/dujiao-next/internal/modules/wallet/transport/http"
 	"github.com/dujiao-next/internal/platform/http/response"
-	systemtransport "github.com/dujiao-next/internal/platform/http/system"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
@@ -102,9 +100,6 @@ func registerAdminRoutes(
 	// 仪表盘
 	dashboardtransport.RegisterAdminRoutes(authorized, adminDashboardHandler)
 
-	// 广告代理
-	adproxytransport.RegisterAdminRoutes(authorized, adproxytransport.NewAdminHandler(c.AdProxyService))
-
 	// 商品 / 分类管理
 	producthttp.RegisterAdminRoutes(authorized, adminCatalogProductHandler)
 	contenttransport.RegisterAdminRoutes(authorized, adminContentHandler)
@@ -121,9 +116,6 @@ func registerAdminRoutes(
 	settingstransport.RegisterAdminAffiliateRoutes(authorized, settingstransport.NewAffiliateHandler(c.SettingService))
 	settingstransport.RegisterAdminTelegramBotRoutes(authorized, settingstransport.NewTelegramBotHandler(c.SettingService))
 	adminauthtransport.RegisterAdminPasswordRoutes(authorized, adminLoginHandler)
-
-	// 系统信息与版本检测
-	systemtransport.RegisterAdminRoutes(authorized, systemtransport.NewAdminHandler(nil))
 
 	adminauthtransport.RegisterAdmin2FARoutes(authorized, admin2FAHandler)
 
